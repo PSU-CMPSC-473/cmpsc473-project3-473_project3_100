@@ -1,0 +1,10 @@
+Total-num-instr 9
+MEM 0xc80b7
+MEM 0xa48db
+MEM 0xc80b7
+MEM 0xa48db
+MEM 0xc80b7
+MEM 0xa48db
+NONMEM
+NONMEM
+NONMEM
