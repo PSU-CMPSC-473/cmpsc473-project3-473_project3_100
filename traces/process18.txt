@@ -1,5 +1,0 @@
-Total-num-instr 4
-MEM 0x13572
-MEM 0x5ad36
-MEM 0xedbcb
-NONMEM
