@@ -1,6 +1,13 @@
 #include "simulator.h"
 #include <string.h>
 
+typedef struct pageTable{
+    int pageLevel;  // 1-3
+    int pageIndex;  // 0< pageIndex < pageSize
+    int pageSize;   // max # of element of a pageList
+    gll_t *pageAdd;
+}pageTable;
+
 void init()
 {
     current_time = 0;
@@ -8,6 +15,7 @@ void init()
     readyProcess = gll_init();
     runningProcess= gll_init();
     blockedProcess = gll_init();
+    TLBList = gll_init();
 
     processList = gll_init();
     traceptr = openTrace(traceFileName);
@@ -49,6 +57,10 @@ void init()
     }
 
     //TODO: Initialize what you need
+    int i;
+    for(i=0; i<16; i++){
+      gll_push(TLBList, 0);
+    }
     
 }
 
@@ -127,6 +139,12 @@ int readPage(struct PCB* p, uint64_t stopTime)
     }
     else{
         //TODO: for MEM traces
+        int i;
+        for(i=0; i<16; i++){
+          if(strcmp(gll_get(TLBList, i), addr->addres)==0){
+            // get physical address
+          }
+        }
         printf("Mem trace not handled\n");
         exit(1);
     }

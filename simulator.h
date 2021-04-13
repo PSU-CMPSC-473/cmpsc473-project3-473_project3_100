@@ -15,7 +15,7 @@ char* outputFileName;
 
 struct SystemParameters* sysParam;
 
-gll_t *processList, *readyProcess, *runningProcess, *blockedProcess;
+gll_t *processList, *readyProcess, *runningProcess, *blockedProcess, *TLBList;
 
 struct TotalStats resultStats;
 
