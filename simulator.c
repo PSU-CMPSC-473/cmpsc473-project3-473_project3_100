@@ -2,20 +2,29 @@
 #include <string.h>
 
 typedef struct pageTable{
-    // int pageLevel;  // 1-3
-    // int pageIndex;  // 0< pageIndex < pageSize
-    int pageSize;   // max # of element of a pageList
-    gll_t *pageAdd;
+    int pageLevel;
+    int pageIndex;
+    int pageSize;
 }pageTable;
+  
+typedef struct TLBnode{
+    char v;
+    unsigned int tag;
+    unsigned int 
+    *pte;
+}TLBnode;
 
-/*
-typedef struct tlbNode{
-    unsigned int data;    //32bits, 1:validbit, 2-21:TAG, 22-32: PTE
-    struct tlbNode *prev;
-    struct tlbNode *next;
-}TLBNode;
-unsigned int TLBList[16];
-*/
+typedef struct PPT{
+    gll_node_t *phead;
+    int curr_size;
+    int size_limit;
+}PP;
+
+typedef struct PNode{
+    unsigned int *vp;
+}PNode;
+
+
 
 void init()
 {
@@ -24,7 +33,6 @@ void init()
     readyProcess = gll_init();
     runningProcess= gll_init();
     blockedProcess = gll_init();
-    TLBList = gll_init();
 
     processList = gll_init();
     traceptr = openTrace(traceFileName);
@@ -66,12 +74,17 @@ void init()
     }
 
     //TODO: Initialize what you need
+    TLBList = gll_init();
     
-    /*int i;
-    for(i=0; i<16; i++){
-      gll_push(TLBList, 0);
+    PPTList = gll_init();
+    int i;
+    //init TLB
+    for(i=0; i<sysParam->TLB_size_in_entries; i++){
+        struct TLBnode *tlb = malloc(sizeof(struct TLBnode));
+        tlb->v = 0;
+        gll_push(TLBList, tlb);
     }
-    */
+
     
 }
 
@@ -87,7 +100,7 @@ void finishAll()
     gll_destroy(processList);
 
 //TODO: Anything else you want to destroy
-
+    gll_destroy(TLBList);
     closeTrace(traceptr);
 }
 
@@ -150,18 +163,40 @@ int readPage(struct PCB* p, uint64_t stopTime)
     }
     else{
         //TODO: for MEM traces
+        bool TLBfound = false;
         int i;
-        for(i=0; i<16; i++){
-          if(strcmp(gll_get(TLBList, i), addr->address&(~0xfff))==0){
-            return 1;
-            // get physical address
-          }
-        }
-        // if TLB miss/didn't return 1
-        // search in pageTable
         
-        printf("Mem trace not handled\n");
-        exit(1);
+        unsigned int addr_tag = (addr -> address) &(~0xFFF);
+        for(i=0; i<16; i++){
+            if((strcmp(gll_get(TLBList, i)->tag, addr_tag)==0) && gll_get(TLBList, i)->v == true){
+                TLBfound = true;
+                break;
+            }
+        }
+        timeAvailable -= sysParam->TLB_latency;
+        if (TLBfound == true){
+            unsigned int pa = gll_get(TLBList, i)->tpe;
+            if(timeAvailable - sysParam->DRAM_latency > 0){    //TLB hit, if time is enough, access DRAM
+                timeAvailable -= sysParam->DRAM_latency;
+                return 1;
+            }
+            else{    //time not enough, exit
+                gll_pushBack(blockedProcess, gll_first(runningProcess));
+                gll_pop(runningProcess);
+                return 0;
+            }
+        }
+        else{
+            if(timeAvailable - 2*(sysParam->DRAM_latency) > 0){    //TLB miss, 
+                //TODO search DRAM, if page hit, (2*DRAM-latency); if page fault, swap, (2*DRAM-latency+Swap-latency), return -1
+                
+            }
+            else{    //time not enough, exit
+                gll_pushBack(blockedProcess, gll_first(runningProcess));
+                gll_pop(runningProcess);
+                return 0;
+            }
+        }
     }
 }
 
@@ -285,11 +320,49 @@ void printExecOrder(void* v)
 
 void diskToMemory()
 {
+    gll_t *VPList;
     // TODO: Move requests from disk to memory
     // TODO: move appropriate blocked process to ready process
-    struct PCB* temp = gll_first(readyProcess);
-    gll_pushBack(blockedProcess, temp);
-    gll_pop(runningProcess);
+    struct PCB* temp = gll_first(blockedProcess);
+    address = gll_first(temp->memReq);
+    unsigned int l1 = address >> (32 - sysParam->N1_in_bits);
+    unsigned int l2 = address << (sysParam->N1_in_bits);
+    l2 = l2 >> (32 - sysParam->N2_in_bits);
+    unsigned int l3 = address << (sysParam->N1_in_bits + sysParam->N2_in_bits);
+    l3 = l3 >> (32 - sysParam->N3_in_bits);
+    if (temp->vphead == NULL){
+        //init a new page table
+        VPList = gll_init();
+        for(i=0; i<2^(sysParam->N1_in_bits); i++){
+            struct VP *vp = malloc(sizeof(struct VP));
+            gll_push(VPList, vp);
+        }
+        temp->vphead = &VPList;
+    
+    }
+    if(gll_findNode(temp->vphead, l1) == NULL){
+        VPList = gll_init();
+        for(i=0; i<2^(sysParam->N2_in_bits); i++){
+            struct VP *vp = malloc(sizeof(struct VP));
+            gll_push(VPList, vp);
+        }
+        gll_set(temp->vphead, VPList, l1);
+        
+    }
+    if(gll_findNode(gll_findNode(temp->vphead, l1), l2) == NULL){
+        VPList = gll_init();
+        for(i=0; i<2^(sysParam->N3_in_bits); i++){
+            struct VP *vp = malloc(sizeof(struct VP));
+            gll_push(VPList, vp);
+        }
+        gll_set(gll_findNode(temp->vphead, l1), VPList, l2);
+    }
+    unsigned int* PA = malloc(sizeof(address));
+    gll_set(gll_findNode(gll_findNode(temp->vphead, l1), l2), PA, l3);
+    
+    
+    gll_pushBack(readyProcess, temp);
+    gll_pop(blockedProcess);
     if(debug == 1)
     {
         printf("Done diskToMemory\n");
