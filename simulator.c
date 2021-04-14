@@ -2,11 +2,20 @@
 #include <string.h>
 
 typedef struct pageTable{
-    int pageLevel;  // 1-3
-    int pageIndex;  // 0< pageIndex < pageSize
+    // int pageLevel;  // 1-3
+    // int pageIndex;  // 0< pageIndex < pageSize
     int pageSize;   // max # of element of a pageList
     gll_t *pageAdd;
 }pageTable;
+
+/*
+typedef struct tlbNode{
+    unsigned int data;    //32bits, 1:validbit, 2-21:TAG, 22-32: PTE
+    struct tlbNode *prev;
+    struct tlbNode *next;
+}TLBNode;
+unsigned int TLBList[16];
+*/
 
 void init()
 {
@@ -57,10 +66,12 @@ void init()
     }
 
     //TODO: Initialize what you need
-    int i;
+    
+    /*int i;
     for(i=0; i<16; i++){
       gll_push(TLBList, 0);
     }
+    */
     
 }
 
@@ -141,10 +152,14 @@ int readPage(struct PCB* p, uint64_t stopTime)
         //TODO: for MEM traces
         int i;
         for(i=0; i<16; i++){
-          if(strcmp(gll_get(TLBList, i), addr->addres)==0){
+          if(strcmp(gll_get(TLBList, i), addr->address&(~0xfff))==0){
+            return 1;
             // get physical address
           }
         }
+        // if TLB miss/didn't return 1
+        // search in pageTable
+        
         printf("Mem trace not handled\n");
         exit(1);
     }
@@ -272,6 +287,9 @@ void diskToMemory()
 {
     // TODO: Move requests from disk to memory
     // TODO: move appropriate blocked process to ready process
+    struct PCB* temp = gll_first(readyProcess);
+    gll_pushBack(blockedProcess, temp);
+    gll_pop(runningProcess);
     if(debug == 1)
     {
         printf("Done diskToMemory\n");
