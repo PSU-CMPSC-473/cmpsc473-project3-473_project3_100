@@ -9,9 +9,8 @@ typedef struct pageTable{
   
 typedef struct TLBnode{
     char v;
-    unsigned int tag;
-    unsigned int 
-    *pte;
+    char* tag;
+    //unsigned int *pte;
 }TLBnode;
 
 typedef struct PPT{
@@ -24,7 +23,7 @@ typedef struct PNode{
     unsigned int *vp;
 }PNode;
 
-
+int pAddr = 0;
 
 void init()
 {
@@ -163,18 +162,22 @@ int readPage(struct PCB* p, uint64_t stopTime)
     }
     else{
         //TODO: for MEM traces
-        bool TLBfound = false;
+        //unsigned int TAG;  // tlb tag
+        
+        char TLBfound = 0;
         int i;
         
-        unsigned int addr_tag = (addr -> address) &(~0xFFF);
+        unsigned int addr_tag = (unsigned int)strtol(addr -> address) >> sysParam->P_in_bits;
         for(i=0; i<16; i++){
-            if((strcmp(gll_get(TLBList, i)->tag, addr_tag)==0) && gll_get(TLBList, i)->v == true){
-                TLBfound = true;
+            if(((unsigned int)strtol(gll_get(TLBList, i)->tag) == addr_tag) && gll_get(TLBList, i)->v == 1){
+                TLBfound = 1;
+                //TAG = (unsigned int)strtol(gll_get(TLBList, i)->tag);  // convert char tag into unsigned int tag
                 break;
             }
         }
+        
         timeAvailable -= sysParam->TLB_latency;
-        if (TLBfound == true){
+        if (TLBfound == 1){
             unsigned int pa = gll_get(TLBList, i)->tpe;
             if(timeAvailable - sysParam->DRAM_latency > 0){    //TLB hit, if time is enough, access DRAM
                 timeAvailable -= sysParam->DRAM_latency;
@@ -357,9 +360,8 @@ void diskToMemory()
         }
         gll_set(gll_findNode(temp->vphead, l1), VPList, l2);
     }
-    unsigned int* PA = malloc(sizeof(address));
-    gll_set(gll_findNode(gll_findNode(temp->vphead, l1), l2), PA, l3);
-    
+    gll_set(gll_findNode(gll_findNode(temp->vphead, l1), l2), pAddr, l3);
+    pAddr++;
     
     gll_pushBack(readyProcess, temp);
     gll_pop(blockedProcess);

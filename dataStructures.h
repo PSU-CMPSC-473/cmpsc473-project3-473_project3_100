@@ -19,7 +19,7 @@ struct PCB
     int hitCount;
     int missCount;
     uint64_t fracLeft;
-    VP* vphead;
+    unsigned int* vphead;
     
     uint64_t OS_time;
     uint64_t user_time;
