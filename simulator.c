@@ -9,7 +9,7 @@ typedef struct pageTable{
   
 typedef struct TLBnode{
     char v;
-    char* tag;
+    unsigned int tag;
     //unsigned int *pte;
 }TLBnode;
 
@@ -172,8 +172,8 @@ int readPage(struct PCB* p, uint64_t stopTime)
         
         unsigned int addr_tag = (unsigned int)strtol(addr -> address, NULL, 16) >> sysParam->P_in_bits;
         for(i=0; i<16; i++){
-
-            if(((unsigned int)(strtol(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16)) == addr_tag) && ((TLBnode*)gll_get(TLBList, i))->v == 1){
+              //(strtol(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16))
+            if((((TLBnode *)gll_get(TLBList, i))->tag == addr_tag) && ((TLBnode*)gll_get(TLBList, i))->v == 1){
                 TLBfound = 1;
                 //TAG = (unsigned int)strtol(gll_get(TLBList, i)->tag);  // convert char tag into unsigned int tag
                 break;
@@ -196,7 +196,11 @@ int readPage(struct PCB* p, uint64_t stopTime)
         else{
             if(timeAvailable - 2*(sysParam->DRAM_latency) > 0){    //TLB miss, 
                 //TODO search DRAM, if page hit, (2*DRAM-latency); if page fault, swap, (2*DRAM-latency+Swap-latency), return -1
-                
+                struct TLBnode* temp = gll_pop(TLBList);
+                temp->v = 1;
+                temp->tag = addr_tag;
+                gll_pushBack(TLBList, temp);
+                return 1;
             }
             else{    //time not enough, exit
                 gll_pushBack(blockedProcess, gll_first(runningProcess));
@@ -331,7 +335,8 @@ void diskToMemory()
     // TODO: Move requests from disk to memory
     // TODO: move appropriate blocked process to ready process
     struct PCB* temp = gll_first(blockedProcess);
-    unsigned int address = gll_first(temp->memReq);
+    struct NextMem* addr = gll_first(temp->memReq);
+    unsigned int address = (unsigned int) strtol(addr->address, NULL, 16);
     unsigned int l1 = address >> (32 - sysParam->N1_in_bits);
     unsigned int l2 = address << (sysParam->N1_in_bits);
     l2 = l2 >> (32 - sysParam->N2_in_bits);
