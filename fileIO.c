@@ -190,6 +190,9 @@ struct SystemParameters* readSysParam(FILE* fptr)
 
     struct SystemParameters* sysParam = malloc(sizeof(systemParameters));
     char* line = NULL;
+    char* TLBtypeLine = NULL;
+    char* TLBrepLine = NULL;
+    char* PGrepLine = NULL;
     ssize_t read;
     size_t len = 0;
     char *token;
@@ -326,10 +329,10 @@ struct SystemParameters* readSysParam(FILE* fptr)
         exit(1);
     }
     
-    read = getline(&line, &len, fptr);
+    read = getline(&TLBtypeLine, &len, fptr);
     if(read != -1)
     {
-        token = strtok(line, " ");
+        token = strtok(TLBtypeLine, " ");
         token = strtok(NULL, " ");
         // printf("TLB_type string , %s::\n", token);
         token[strcspn(token, "\n")] = '\0'; //removes trailing newline characters, if any
@@ -341,10 +344,10 @@ struct SystemParameters* readSysParam(FILE* fptr)
         exit(1);
     }
 
-    read = getline(&line, &len, fptr);
+    read = getline(&TLBrepLine, &len, fptr);
     if(read != -1)
     {
-        token = strtok(line, " ");
+        token = strtok(TLBrepLine, " ");
         token = strtok(NULL, " ");
         // printf("TLB-replacement-policy string , %s::\n", token);
         token[strcspn(token, "\n")] = '\0'; //removes trailing newline characters, if any
@@ -360,6 +363,7 @@ struct SystemParameters* readSysParam(FILE* fptr)
     read = getline(&line, &len, fptr);
 
     read = getline(&line, &len, fptr);
+
     if(read != -1)
     {
         token = strtok(line, " ");
@@ -446,10 +450,10 @@ struct SystemParameters* readSysParam(FILE* fptr)
     }
 
 
-    read = getline(&line, &len, fptr);
+    read = getline(&PGrepLine, &len, fptr);
     if(read != -1)
     {
-        token = strtok(line, " ");
+        token = strtok(PGrepLine, " ");
         token = strtok(NULL, " ");
         // printf("Page-replacement-policy string , %s::\n", token);
         token[strcspn(token, "\n")] = '\0'; //removes trailing newline characters, if any

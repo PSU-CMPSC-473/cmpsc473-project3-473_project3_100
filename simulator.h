@@ -19,7 +19,7 @@ gll_t *processList, *readyProcess, *runningProcess, *blockedProcess, *TLBList, *
 
 struct TotalStats resultStats;
 
-uint64_t current_time, nextDiskReadTime, nextQuanta, nextDiskInt;
+uint64_t current_time, nextDiskReadTime, nextQuanta, nextDiskInt, disk_interrupt_clock;
 
 uint64_t OSTime = 0;
 uint64_t userTime = 0;

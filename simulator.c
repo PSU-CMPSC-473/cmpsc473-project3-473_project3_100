@@ -14,11 +14,11 @@ typedef struct TLBnode{
     //unsigned int *pte;
 }TLBnode;
 
-typedef struct PPT{
-    gll_node_t *phead;
-    int curr_size;
-    int size_limit;
-}PP;
+typedef struct ppNode{
+    struct PCB* pAddr;
+    void* addr;
+}ppNode;
+
 
 typedef struct PNode{
     unsigned int *vp;
@@ -29,8 +29,19 @@ int pAddr = 0;
 typedef struct VP{
     void *next_addr;
 }VP;
+
+int power(int power){
+    int i;
+    int base = 1; 
+    for(i=0; i<power; i++){
+      base*=2;
+    }
+    return base;
+}
+
 void init()
 {
+    printf("func init start\n"); //test
     current_time = 0;
     nextQuanta = current_time + quantum;
     readyProcess = gll_init();
@@ -38,10 +49,10 @@ void init()
     blockedProcess = gll_init();
 
     processList = gll_init();
+
     traceptr = openTrace(traceFileName);
-
     sysParam = readSysParam(traceptr);
-
+    
     //read traces from trace file and put them in the processList
     struct PCB* temp = readNextTrace(traceptr);
     if(temp == NULL)
@@ -55,7 +66,7 @@ void init()
         gll_pushBack(processList, temp);
         temp = readNextTrace(traceptr);
     }
-
+    
     //transfer ready processes from processList to readyProcess list
     temp = gll_first(processList);
     
@@ -70,25 +81,43 @@ void init()
             gll_pushBack(temp->memReq, tempAddr);
             tempAddr = readNextMem(temp->memoryFile);
         }
+        
+        //write from here->
+        gll_t* VPList = gll_init();
+        int i;
+        for(i=0; i<power(sysParam->N1_in_bits); i++){
+            struct VP *vp = calloc(1,(sizeof(struct VP)));
+            gll_push(VPList, vp);
+        }
+        temp->vphead = VPList;
+        //<-to here
+        
         gll_pushBack(readyProcess, temp);
         gll_pop(processList);
 
         temp = gll_first(processList);
     }
-
     //TODO: Initialize what you need
-    /*
+    
     TLBList = gll_init();
     
     PPTList = gll_init();
     int i;
     //init TLB
-    for(i=0; i<sysParam->TLB_size_in_entries; i++){
+    for(i=0; i<(sysParam->TLB_size_in_entries); i++){
         struct TLBnode *tlb = malloc(sizeof(struct TLBnode));
         tlb->v = 0;
         gll_push(TLBList, tlb);
     }
-*/
+    
+    int ppn = (power(22)) / (power(sysParam->P_in_bits)); // ppn
+    // init pp
+    for (i=0; i<ppn; i++){
+        struct ppNode *ppt = malloc(sizeof(struct ppNode));
+        gll_push(PPTList, ppt);
+    }
+    
+    disk_interrupt_clock = 0;
     
 }
 
@@ -102,7 +131,8 @@ void finishAll()
     gll_destroy(runningProcess);
     gll_destroy(blockedProcess);
     gll_destroy(processList);
-
+    
+    printf("func finishAll end\n"); // test
 //TODO: Anything else you want to destroy
     //gll_destroy(TLBList);
     //closeTrace(traceptr);
@@ -127,7 +157,7 @@ void statsUpdate()
 
 //returns 1 on success, 0 if trace ends, -1 if page fault
 int readPage(struct PCB* p, uint64_t stopTime)
-{
+{   printf("func readP start\n"); //test
     struct NextMem* addr = gll_first(p->memReq);
     uint64_t timeAvailable = stopTime - current_time;
     
@@ -187,29 +217,71 @@ int readPage(struct PCB* p, uint64_t stopTime)
             //TLB hit
             if(timeAvailable - sysParam->DRAM_latency > 0){    //if time is enough, access DRAM
                 timeAvailable -= sysParam->DRAM_latency;
-                return 1;
-            }
-            else{    //time not enough, exit
-                gll_pushBack(blockedProcess, gll_first(runningProcess));
-                gll_pop(runningProcess);
-                return 0;
-            }
-        }
-        else{
-            if(timeAvailable - 2*(sysParam->DRAM_latency) > 0){    //TLB miss, 
+                //update TLB
                 struct TLBnode* temp = gll_first(TLBList);
                 gll_pop(TLBList);
                 temp->v = 1;
                 temp->tag = addr_tag;
                 gll_pushBack(TLBList, temp);
+                
+                //update PPT
+                struct ppNode* tempp = gll_first(PPTList);
+                gll_pop(PPTList);
+                tempp->pAddr = p;
+                tempp->addr = addr;
+                gll_pushBack(PPTList, tempp);
+                
                 return 1;
             }
             else{    //time not enough, exit
                 gll_pushBack(blockedProcess, gll_first(runningProcess));
                 gll_pop(runningProcess);
-                return 0;
+                return 1;
             }
         }
+        // TLB miss
+        if(timeAvailable - sysParam->DRAM_latency > 0){    //TLB miss, 
+            // slice tag into l1, l2, and l3
+            unsigned int address = (unsigned int) strtol(addr->address, NULL, 16);
+            unsigned int l1 = address >> (sysParam->N2_in_bits + sysParam->N3_in_bits);
+            unsigned int l2 = address << (32 - sysParam->N2_in_bits - sysParam->N3_in_bits);
+            l2 = l2 >> (32 - sysParam->N2_in_bits);
+            unsigned int l3 = address << (32 - sysParam->N3_in_bits);
+            l3 = l3 >> (32 - sysParam->N3_in_bits);
+            
+            if((p->vphead == NULL)||(gll_get(p->vphead, l1) == 0)||(gll_get(gll_get(p->vphead, l1), l2) == 0)){
+              // page fault
+              current_time += sysParam->Page_fault_trap_handling_time;
+              nextQuanta += sysParam->Page_fault_trap_handling_time;
+              OSTime += sysParam->Page_fault_trap_handling_time;
+              return -1;
+            }
+            // page hit, update TLB
+            timeAvailable -= sysParam->DRAM_latency;
+            
+            //update TLB
+            struct TLBnode* temp = gll_first(TLBList);
+            gll_pop(TLBList);
+            temp->v = 1;
+            temp->tag = addr_tag;
+            gll_pushBack(TLBList, temp);
+            
+            //update PPT
+            struct ppNode* tempp = gll_first(PPTList);
+            gll_pop(PPTList);
+            tempp->pAddr = p;
+            tempp->addr = addr;
+            gll_pushBack(PPTList, tempp);
+            
+            return 1;
+                
+        }
+        else{    //time not enough, exit
+            gll_pushBack(blockedProcess, gll_first(runningProcess));
+            gll_pop(runningProcess);
+            return 1;
+        }
+        
     }
 }
 
@@ -231,17 +303,21 @@ void schedulingRR(int pauseCause)
 
 /*runs a process. returns 0 if page fault, 1 if quanta finishes, -1 if traceFile ends, 2 if no running process, 4 if disk Interrupt*/
 int processSimulator()
-{
+{   printf("func processS start\n"); //test
     uint64_t stopTime = nextQuanta;
     int stopCondition = 1;
     if(gll_first(runningProcess)!=NULL)
     {
         //TODO
-        //if(TODO: if there is a pending disk operation in the future)
-        //{
+        if((disk_interrupt_clock + sysParam->Swap_latency) > stopTime) 
+        {
             //TODO: stopTime = occurance of the first disk interrupt
-        //    stopCondition = 4;
-        //}
+                stopCondition = 4;
+                current_time += sysParam->Swap_interrupt_handling_time; 
+                nextQuanta += sysParam->Swap_interrupt_handling_time; 
+                OSTime += sysParam->Swap_interrupt_handling_time; 
+        }
+        
         while(current_time < stopTime)
         {
             
@@ -332,58 +408,106 @@ void printExecOrder(void* v)
 
 
 void diskToMemory()
-{
+{   
+
+   
+    printf("func dtm start\n"); //test
     gll_t *VPList;
     // TODO: Move requests from disk to memory
     // TODO: move appropriate blocked process to ready process
+    struct ppNode* tempp = gll_pop(PPTList);
+    struct PCB* tempPCB = tempp->pAddr;
+    struct NextMem* paddr= tempp->addr;
+    
+    unsigned int address = (unsigned int) strtol(paddr->address, NULL, 16);
+    unsigned int pl1 = address >> (32 - sysParam->N1_in_bits);
+    unsigned int pl2 = address << (sysParam->N1_in_bits);
+    pl2 = pl2 >> (32 - sysParam->N2_in_bits);
+    unsigned int pl3 = address << (sysParam->N1_in_bits + sysParam->N2_in_bits);
+    pl3 = pl3 >> (32 - sysParam->N3_in_bits);
+    gll_set();// set the pg block into 0
+    
+    
+    
     struct PCB* temp = gll_first(blockedProcess);
+    if(temp != NULL){
+    
     struct NextMem* addr = gll_first(temp->memReq);
-    unsigned int address = (unsigned int) strtol(addr->address, NULL, 16);
+    
+    
+    
+    address = (unsigned int) strtol(addr->address, NULL, 16);
     unsigned int l1 = address >> (32 - sysParam->N1_in_bits);
     unsigned int l2 = address << (sysParam->N1_in_bits);
     l2 = l2 >> (32 - sysParam->N2_in_bits);
+    
     unsigned int l3 = address << (sysParam->N1_in_bits + sysParam->N2_in_bits);
     l3 = l3 >> (32 - sysParam->N3_in_bits);
-    if (temp->vphead == NULL){
-        //init a new page table
-        VPList = gll_init();
-        int i;
-        for(i=0; i<2^(sysParam->N1_in_bits); i++){
-            struct VP *vp = calloc(1,(sizeof(struct VP)));
-            
-            gll_push(VPList, vp);
-        }
-        temp->vphead = VPList;
+    printf("func dtm md0\n"); //test
     
-    }
-    if(gll_get(temp->vphead, l1) == 0){
+    
+    printf("func dtm enter 1st for: %p\n",*(int*)gll_get(temp->vphead, l1));
+    if(*(int*)gll_get(temp->vphead, l1) == 0){
+
         VPList = gll_init();
         int i;
-        for(i=0; i<2^(sysParam->N2_in_bits); i++){
-            struct VP *vp = calloc(1, (sizeof(struct VP)));
-            gll_push(VPList, vp);
+        for(i=0; i<power(sysParam->N2_in_bits); i++){
+            //struct VP *vp = calloc(1, (sizeof(struct VP)));
+            gll_push(VPList, calloc(1, (sizeof(struct VP))));
         }
         gll_set(temp->vphead, VPList, l1);
-        
     }
-    if(gll_get(gll_get(temp->vphead, l1), l2) == 0){
+
+    if(*(int*)gll_get((gll_t*)gll_get(temp->vphead, l1), l2) == 0){
         VPList = gll_init();
         int i;
-        for(i=0; i<2^(sysParam->N3_in_bits); i++){
-            struct VP *vp = calloc(1, (sizeof(struct VP)));
-            gll_push(VPList, vp);
+        for(i=0; i<power(sysParam->N3_in_bits); i++){
+            //struct VP *vp = calloc(1, (sizeof(struct VP)));
+            gll_push(VPList, calloc(1, (sizeof(struct VP))));
         }
+
+        // cannot set
         gll_set((gll_t*)gll_get(temp->vphead, l1), VPList, l2);
+
     }
+    
+    
     unsigned int* paddr = &pAddr;
-    gll_set((gll_t*)gll_get((gll_t*)gll_get(temp->vphead, l1), l2), paddr, l3);
+    /*
+    VPList = (gll_t*)gll_get(temp->vphead, l1);
+    VPList = (gll_t*)gll_get(VPList, l2);
+    gll_set(VPList, paddr, l3);
+    */
+    gll_set((gll_t*)gll_get((gll_t*)gll_get(temp->vphead, l1), l2), paddr, l3);  // err
+    printf("func dtm md2\n"); //test
     pAddr++;
+    
+
+    struct ppNode* nPP;
+    nPP->pAddr = temp;
+    nPP->addr = addr;
+    gll_pushBack(PPTList, nPP);
+    
+    
+    unsigned int addr_tag = (unsigned int)strtol((gll_first(temp->memReq))->address, NULL, 16) >> sysParam->P_in_bits;
+    struct TLBnode* tempTLB = gll_first(TLBList);
+    gll_pop(TLBList);
+    tempTLB->v = 1;
+    tempTLB->tag = addr_tag;
+    gll_pushBack(TLBList, tempTLB);
     
     gll_pushBack(readyProcess, temp);
     gll_pop(blockedProcess);
+    printf("func dtm end\n"); //test
+    
+    
+    
     if(debug == 1)
     {
         printf("Done diskToMemory\n");
+    }
+    printf("func dtm end\n"); //test
+    
     }
 }
 
@@ -491,12 +615,12 @@ void simulate()
                 }
                 struct NextMem* tempAddr;
                 tempProcess->memoryFile = openTrace(tempProcess->memoryFilename);
-                temp->numOfIns = readNumIns(temp->memoryFile);
-                tempAddr = readNextMem(temp->memoryFile);
+                tempProcess->numOfIns = readNumIns(tempProcess->memoryFile);
+                tempAddr = readNextMem(tempProcess->memoryFile);
                 while(tempAddr!= NULL)
                 {
-                    gll_pushBack(temp->memReq, tempAddr);
-                    tempAddr = readNextMem(temp->memoryFile);
+                    gll_pushBack(tempProcess->memReq, tempAddr);
+                    tempAddr = readNextMem(tempProcess->memoryFile);
                 }
                 gll_pushBack(readyProcess, tempProcess);
                 gll_pop(processList);
@@ -547,12 +671,12 @@ void simulate()
                         printf("\nGoing to move from proess list to ready\n");
                     }
                     tempProcess->memoryFile = openTrace(tempProcess->memoryFilename);
-                    temp->numOfIns = readNumIns(temp->memoryFile);
-                    tempAddr = readNextMem(temp->memoryFile);
+                    tempProcess->numOfIns = readNumIns(tempProcess->memoryFile);
+                    tempAddr = readNextMem(tempProcess->memoryFile);
                     while(tempAddr!= NULL)
                     {
-                        gll_pushBack(temp->memReq, tempAddr);
-                        tempAddr = readNextMem(temp->memoryFile);
+                        gll_pushBack(tempProcess->memReq, tempAddr);
+                        tempAddr = readNextMem(tempProcess->memoryFile);
                     }
                     gll_pushBack(readyProcess, tempProcess);
                     gll_pop(processList);
@@ -571,7 +695,7 @@ void simulate()
 }
 
 int main(int argc, char** argv)
-{
+{   printf("func main start\n");//test
     if(argc == 1)
     {
         printf("No file input\n");
@@ -581,8 +705,10 @@ int main(int argc, char** argv)
     outputFileName = argv[2];
 
     simulate();
+    printf("func sim finished\n"); //test
     finishAll();
-    statsUpdate();
+    printf("func fa finished\n"); //test
+    statsUpdate();printf("func su finished\n"); //test
 
     if(writeToFile(outputFileName, resultStats) == 0)
     {
