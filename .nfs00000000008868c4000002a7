@@ -9,7 +9,6 @@ typedef struct pageTable{
   
 typedef struct TLBnode{
     char v;
-    //char* tag;
     unsigned int tag;
     //unsigned int *pte;
 }TLBnode;
@@ -77,7 +76,6 @@ void init()
     }
 
     //TODO: Initialize what you need
-    /*
     TLBList = gll_init();
     
     PPTList = gll_init();
@@ -88,7 +86,7 @@ void init()
         tlb->v = 0;
         gll_push(TLBList, tlb);
     }
-*/
+
     
 }
 
@@ -104,8 +102,8 @@ void finishAll()
     gll_destroy(processList);
 
 //TODO: Anything else you want to destroy
-    //gll_destroy(TLBList);
-    //closeTrace(traceptr);
+    gll_destroy(TLBList);
+    closeTrace(traceptr);
 }
 
 void statsinit()
@@ -174,8 +172,8 @@ int readPage(struct PCB* p, uint64_t stopTime)
         
         unsigned int addr_tag = (unsigned int)strtol(addr -> address, NULL, 16) >> sysParam->P_in_bits;
         for(i=0; i<16; i++){
-
-            if(((unsigned int)(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16) == addr_tag) && ((TLBnode*)gll_get(TLBList, i))->v == 1){
+              //(strtol(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16))
+            if((((TLBnode *)gll_get(TLBList, i))->tag == addr_tag) && ((TLBnode*)gll_get(TLBList, i))->v == 1){
                 TLBfound = 1;
                 //TAG = (unsigned int)strtol(gll_get(TLBList, i)->tag);  // convert char tag into unsigned int tag
                 break;
@@ -184,8 +182,8 @@ int readPage(struct PCB* p, uint64_t stopTime)
         
         timeAvailable -= sysParam->TLB_latency;
         if (TLBfound == 1){
-            //TLB hit
-            if(timeAvailable - sysParam->DRAM_latency > 0){    //if time is enough, access DRAM
+            //unsigned int pa = gll_get(TLBList, i)->tpe;
+            if(timeAvailable - sysParam->DRAM_latency > 0){    //TLB hit, if time is enough, access DRAM
                 timeAvailable -= sysParam->DRAM_latency;
                 return 1;
             }
@@ -197,8 +195,8 @@ int readPage(struct PCB* p, uint64_t stopTime)
         }
         else{
             if(timeAvailable - 2*(sysParam->DRAM_latency) > 0){    //TLB miss, 
-                struct TLBnode* temp = gll_first(TLBList);
-                gll_pop(TLBList);
+                //TODO search DRAM, if page hit, (2*DRAM-latency); if page fault, swap, (2*DRAM-latency+Swap-latency), return -1
+                struct TLBnode* temp = gll_pop(TLBList);
                 temp->v = 1;
                 temp->tag = addr_tag;
                 gll_pushBack(TLBList, temp);
@@ -349,34 +347,32 @@ void diskToMemory()
         VPList = gll_init();
         int i;
         for(i=0; i<2^(sysParam->N1_in_bits); i++){
-            struct VP *vp = calloc(1,(sizeof(struct VP)));
-            
+            struct VP *vp = malloc(sizeof(struct VP));
             gll_push(VPList, vp);
         }
         temp->vphead = VPList;
     
     }
-    if(gll_get(temp->vphead, l1) == 0){
+    if(gll_findNode(temp->vphead, l1) == NULL){
         VPList = gll_init();
         int i;
         for(i=0; i<2^(sysParam->N2_in_bits); i++){
-            struct VP *vp = calloc(1, (sizeof(struct VP)));
+            struct VP *vp = malloc(sizeof(struct VP));
             gll_push(VPList, vp);
         }
         gll_set(temp->vphead, VPList, l1);
         
     }
-    if(gll_get(gll_get(temp->vphead, l1), l2) == 0){
+    if(gll_findNode(gll_findNode(temp->vphead, l1), l2) == NULL){
         VPList = gll_init();
         int i;
         for(i=0; i<2^(sysParam->N3_in_bits); i++){
-            struct VP *vp = calloc(1, (sizeof(struct VP)));
+            struct VP *vp = malloc(sizeof(struct VP));
             gll_push(VPList, vp);
         }
-        gll_set((gll_t*)gll_get(temp->vphead, l1), VPList, l2);
+        gll_set(gll_findNode(temp->vphead, l1), VPList, l2);
     }
-    unsigned int* paddr = &pAddr;
-    gll_set((gll_t*)gll_get((gll_t*)gll_get(temp->vphead, l1), l2), paddr, l3);
+    gll_set(gll_findNode(gll_findNode(temp->vphead, l1), l2), pAddr, l3);
     pAddr++;
     
     gll_pushBack(readyProcess, temp);
