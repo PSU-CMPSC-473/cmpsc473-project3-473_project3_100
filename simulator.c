@@ -24,9 +24,9 @@ typedef struct PNode{
     unsigned int *vp;
 }PNode;
 
-int pAddr = 0;
 
 typedef struct VP{
+    char v;
     void *next_addr;
 }VP;
 
@@ -38,7 +38,7 @@ int power(int power){
     }
     return base;
 }
-
+int ppe = 0;
 void init()
 {
     printf("func init start\n"); //test
@@ -86,10 +86,14 @@ void init()
         gll_t* VPList = gll_init();
         int i;
         for(i=0; i<power(sysParam->N1_in_bits); i++){
-            struct VP *vp = calloc(1,(sizeof(struct VP)));
+            struct VP *vp = malloc(sizeof(struct VP));
+            vp->next_addr = NULL;
             gll_push(VPList, vp);
+            
         }
+        
         temp->vphead = VPList;
+        printf("vpList: %p\n",temp->vphead);
         //<-to here
         
         gll_pushBack(readyProcess, temp);
@@ -303,7 +307,7 @@ void schedulingRR(int pauseCause)
 
 /*runs a process. returns 0 if page fault, 1 if quanta finishes, -1 if traceFile ends, 2 if no running process, 4 if disk Interrupt*/
 int processSimulator()
-{   printf("func processS start\n"); //test
+{   
     uint64_t stopTime = nextQuanta;
     int stopCondition = 1;
     if(gll_first(runningProcess)!=NULL)
@@ -409,45 +413,69 @@ void printExecOrder(void* v)
 
 void diskToMemory()
 {   
-
-   
+    struct PCB* temp = gll_first(blockedProcess);
+    
+    if(temp != NULL){
+    printf("func dtm temp\n%p\n",temp);
+    printf("zuichudeqidian0: %p\n",temp->vphead);
+    
+    
     printf("func dtm start\n"); //test
     gll_t *VPList;
     // TODO: Move requests from disk to memory
     // TODO: move appropriate blocked process to ready process
+    
+
     struct ppNode* tempp = gll_pop(PPTList);
     struct PCB* tempPCB = tempp->pAddr;
     struct NextMem* paddr= tempp->addr;
     
-    unsigned int address = (unsigned int) strtol(paddr->address, NULL, 16);
-    unsigned int pl1 = address >> (32 - sysParam->N1_in_bits);
-    unsigned int pl2 = address << (sysParam->N1_in_bits);
+    printf("func dtm paddr\n%p\n",paddr);
+    if(paddr != NULL){
+    
+    unsigned int paddress = (unsigned int) strtol(paddr->address, NULL, 16);
+    
+    unsigned int pl1 = paddress >> (32 - sysParam->N1_in_bits);
+    unsigned int pl2 = paddress << (sysParam->N1_in_bits);
     pl2 = pl2 >> (32 - sysParam->N2_in_bits);
-    unsigned int pl3 = address << (sysParam->N1_in_bits + sysParam->N2_in_bits);
+    unsigned int pl3 = paddress << (sysParam->N1_in_bits + sysParam->N2_in_bits);
     pl3 = pl3 >> (32 - sysParam->N3_in_bits);
-    gll_set();// set the pg block into 0
+    //gll_set();// set the pg block into 0
     
+    }
     
-    
-    struct PCB* temp = gll_first(blockedProcess);
-    if(temp != NULL){
     
     struct NextMem* addr = gll_first(temp->memReq);
     
     
     
-    address = (unsigned int) strtol(addr->address, NULL, 16);
+    unsigned int address = (unsigned int) strtol(addr->address, NULL, 16);
     unsigned int l1 = address >> (32 - sysParam->N1_in_bits);
     unsigned int l2 = address << (sysParam->N1_in_bits);
     l2 = l2 >> (32 - sysParam->N2_in_bits);
     
     unsigned int l3 = address << (sysParam->N1_in_bits + sysParam->N2_in_bits);
     l3 = l3 >> (32 - sysParam->N3_in_bits);
+  
     printf("func dtm md0\n"); //test
+    printf("zuichudeqidian1: %p\n",temp->vphead);
+    struct VP* vp = gll_get(temp->vphead, l1);
+    printf("vp: %p\n",vp);
     
+            
+    if(temp->vphead == NULL){
+        VPList = gll_init();
+        int i;
+        for(i=0; i<power(sysParam->N1_in_bits); i++){
+            struct VP *vp = malloc(sizeof(struct VP));
+            vp->next_addr = NULL;
+            gll_push(VPList, vp);
+        }
+        
+        temp->vphead = VPList;
+    }
     
-    printf("func dtm enter 1st for: %p\n",*(int*)gll_get(temp->vphead, l1));
-    if(*(int*)gll_get(temp->vphead, l1) == 0){
+    if(vp->next_addr == NULL){
 
         VPList = gll_init();
         int i;
@@ -457,7 +485,14 @@ void diskToMemory()
         }
         gll_set(temp->vphead, VPList, l1);
     }
+    printf("func dtm md1\n"); //test
+    //vp = gll_get(temp->vphead, l1);
+    
+    
 
+    
+    
+    
     if(*(int*)gll_get((gll_t*)gll_get(temp->vphead, l1), l2) == 0){
         VPList = gll_init();
         int i;
@@ -472,15 +507,15 @@ void diskToMemory()
     }
     
     
-    unsigned int* paddr = &pAddr;
     /*
     VPList = (gll_t*)gll_get(temp->vphead, l1);
     VPList = (gll_t*)gll_get(VPList, l2);
     gll_set(VPList, paddr, l3);
     */
-    gll_set((gll_t*)gll_get((gll_t*)gll_get(temp->vphead, l1), l2), paddr, l3);  // err
+    
+    unsigned int padr = ppe;
+    gll_set((gll_t*)gll_get((gll_t*)gll_get(temp->vphead, l1), l2), &padr, l3);  // err
     printf("func dtm md2\n"); //test
-    pAddr++;
     
 
     struct ppNode* nPP;
@@ -488,8 +523,8 @@ void diskToMemory()
     nPP->addr = addr;
     gll_pushBack(PPTList, nPP);
     
-    
-    unsigned int addr_tag = (unsigned int)strtol((gll_first(temp->memReq))->address, NULL, 16) >> sysParam->P_in_bits;
+    struct NextMem* TLBaddr = gll_first(temp->memReq);
+    unsigned int addr_tag = (unsigned int)strtol(TLBaddr->address, NULL, 16) >> sysParam->P_in_bits;
     struct TLBnode* tempTLB = gll_first(TLBList);
     gll_pop(TLBList);
     tempTLB->v = 1;
@@ -501,6 +536,7 @@ void diskToMemory()
     printf("func dtm end\n"); //test
     
     
+    ppe++;
     
     if(debug == 1)
     {
