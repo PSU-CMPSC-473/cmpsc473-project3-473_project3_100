@@ -25,6 +25,9 @@ typedef struct PNode{
 
 int pAddr = 0;
 
+typedef struct VP{
+    void *next_addr;
+}VP;
 void init()
 {
     current_time = 0;
@@ -167,9 +170,10 @@ int readPage(struct PCB* p, uint64_t stopTime)
         char TLBfound = 0;
         int i;
         
-        unsigned int addr_tag = (unsigned int)strtol(addr -> address) >> sysParam->P_in_bits;
+        unsigned int addr_tag = (unsigned int)strtol(addr -> address, NULL, 16) >> sysParam->P_in_bits;
         for(i=0; i<16; i++){
-            if(((unsigned int)strtol(gll_get(TLBList, i)->tag) == addr_tag) && gll_get(TLBList, i)->v == 1){
+
+            if(((unsigned int)(strtol(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16)) == addr_tag) && ((TLBnode*)gll_get(TLBList, i))->v == 1){
                 TLBfound = 1;
                 //TAG = (unsigned int)strtol(gll_get(TLBList, i)->tag);  // convert char tag into unsigned int tag
                 break;
@@ -178,7 +182,7 @@ int readPage(struct PCB* p, uint64_t stopTime)
         
         timeAvailable -= sysParam->TLB_latency;
         if (TLBfound == 1){
-            unsigned int pa = gll_get(TLBList, i)->tpe;
+            //unsigned int pa = gll_get(TLBList, i)->tpe;
             if(timeAvailable - sysParam->DRAM_latency > 0){    //TLB hit, if time is enough, access DRAM
                 timeAvailable -= sysParam->DRAM_latency;
                 return 1;
@@ -327,7 +331,7 @@ void diskToMemory()
     // TODO: Move requests from disk to memory
     // TODO: move appropriate blocked process to ready process
     struct PCB* temp = gll_first(blockedProcess);
-    address = gll_first(temp->memReq);
+    unsigned int address = gll_first(temp->memReq);
     unsigned int l1 = address >> (32 - sysParam->N1_in_bits);
     unsigned int l2 = address << (sysParam->N1_in_bits);
     l2 = l2 >> (32 - sysParam->N2_in_bits);
@@ -336,15 +340,17 @@ void diskToMemory()
     if (temp->vphead == NULL){
         //init a new page table
         VPList = gll_init();
+        int i;
         for(i=0; i<2^(sysParam->N1_in_bits); i++){
             struct VP *vp = malloc(sizeof(struct VP));
             gll_push(VPList, vp);
         }
-        temp->vphead = &VPList;
+        temp->vphead = VPList;
     
     }
     if(gll_findNode(temp->vphead, l1) == NULL){
         VPList = gll_init();
+        int i;
         for(i=0; i<2^(sysParam->N2_in_bits); i++){
             struct VP *vp = malloc(sizeof(struct VP));
             gll_push(VPList, vp);
@@ -354,6 +360,7 @@ void diskToMemory()
     }
     if(gll_findNode(gll_findNode(temp->vphead, l1), l2) == NULL){
         VPList = gll_init();
+        int i;
         for(i=0; i<2^(sysParam->N3_in_bits); i++){
             struct VP *vp = malloc(sizeof(struct VP));
             gll_push(VPList, vp);
