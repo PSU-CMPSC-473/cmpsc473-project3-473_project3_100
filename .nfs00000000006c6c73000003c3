@@ -174,7 +174,7 @@ int readPage(struct PCB* p, uint64_t stopTime)
         unsigned int addr_tag = (unsigned int)strtol(addr -> address, NULL, 16) >> sysParam->P_in_bits;
         for(i=0; i<16; i++){
 
-            if(((unsigned int)(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16) == addr_tag) && ((TLBnode*)gll_get(TLBList, i))->v == 1){
+            if(((unsigned int)(strtol(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16)) == addr_tag) && ((TLBnode*)gll_get(TLBList, i))->v == 1){
                 TLBfound = 1;
                 //TAG = (unsigned int)strtol(gll_get(TLBList, i)->tag);  // convert char tag into unsigned int tag
                 break;
@@ -336,8 +336,7 @@ void diskToMemory()
     // TODO: Move requests from disk to memory
     // TODO: move appropriate blocked process to ready process
     struct PCB* temp = gll_first(blockedProcess);
-    struct NextMem* addr = gll_first(temp->memReq);
-    unsigned int address = (unsigned int) strtol(addr->address, NULL, 16);
+    unsigned int address = (unsigned int)gll_first(temp->memReq);
     unsigned int l1 = address >> (32 - sysParam->N1_in_bits);
     unsigned int l2 = address << (sysParam->N1_in_bits);
     l2 = l2 >> (32 - sysParam->N2_in_bits);
@@ -348,14 +347,13 @@ void diskToMemory()
         VPList = gll_init();
         int i;
         for(i=0; i<2^(sysParam->N1_in_bits); i++){
-            struct VP *vp = calloc(1,(sizeof(struct VP)));
-            
+            struct VP *vp = malloc(sizeof(struct VP));
             gll_push(VPList, vp);
         }
         temp->vphead = VPList;
     
     }
-    if(gll_findNode(temp->vphead, l1) == 0){
+    if(gll_findNode(temp->vphead, l1) == NULL){
         VPList = gll_init();
         int i;
         for(i=0; i<2^(sysParam->N2_in_bits); i++){
@@ -365,17 +363,16 @@ void diskToMemory()
         gll_set(temp->vphead, VPList, l1);
         
     }
-    if(gll_findNode(gll_findNode(temp->vphead, l1), l2) == 0){
+    if(gll_findNode(gll_findNode(temp->vphead, l1), l2) == NULL){
         VPList = gll_init();
         int i;
         for(i=0; i<2^(sysParam->N3_in_bits); i++){
             struct VP *vp = malloc(sizeof(struct VP));
             gll_push(VPList, vp);
         }
-        gll_set((gll_t*)gll_get(temp->vphead, l1), VPList, l2);
+        gll_set(gll_findNode(temp->vphead, l1), VPList, l2);
     }
-    unsigned int* paddr = &pAddr;
-    gll_set((gll_t*)gll_get((gll_t*)gll_get(temp->vphead, l1), l2), paddr, l3);
+    gll_set(gll_findNode(gll_findNode(temp->vphead, l1), l2), pAddr, l3);
     pAddr++;
     
     gll_pushBack(readyProcess, temp);
