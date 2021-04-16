@@ -6,13 +6,15 @@ typedef struct pageTable{
     int pageIndex;
     int pageSize;
 }pageTable;
-  
+
+/*
 typedef struct TLBnode{
-    int* v;
+    //int* v;
     //char* tag;
     unsigned int tag;
     //unsigned int *pte;
 }TLBnode;
+*/
 
 typedef struct ppNode{
     struct PCB* pAddr;
@@ -109,10 +111,9 @@ void init()
     int i;
     //init TLB
     for(i=0; i<(sysParam->TLB_size_in_entries); i++){
-        struct TLBnode* tlb = malloc(sizeof(struct TLBnode));
-        int iv = 0;
-        tlb->v = &iv;
-        printf("v:%d\n",*tlb->v);
+        unsigned int* tlb = malloc(sizeof(unsigned int));
+        //int iv = 0;
+        //tlb->v = &iv;
         gll_push(TLBList, tlb);
     }
     
@@ -210,34 +211,32 @@ int readPage(struct PCB* p, uint64_t stopTime)
         
         unsigned int addr_tag = (unsigned int)strtol(addr -> address, NULL, 16) >> sysParam->P_in_bits;
         for(i=0; i<16; i++){
-        //printf("%d\n",i);
-        //printf("tlbnode: %u\n",((TLBnode *)gll_get(TLBList, i))->tag);
+        printf("%d\n",i);
+        printf("tlbnode: %u\n", *(unsigned int*)gll_get(TLBList, i));
         //printf("addr_tag: %u\n", addr_tag);
-        //printf("v: %d\n",*((TLBnode*)gll_get(TLBList, i))->v);
         //printf("b\n");
         //printf("if statement: %d", ((unsigned int)(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16) == addr_tag));
-            if((((TLBnode *)gll_get(TLBList, i))->tag == addr_tag) && (*((TLBnode*)gll_get(TLBList, i))->v == 1)){
-                struct TLBnode* tlbn = gll_get(TLBList, i);
-
-
-                TLBfound = 1;
-                //TAG = (unsigned int)strtol(gll_get(TLBList, i)->tag);  // convert char tag into unsigned int tag
-                break;
-            }
+        
+        if((*(unsigned int*)gll_get(TLBList, i)) == addr_tag){
+            struct TLBnode* tlbn = gll_get(TLBList, i);
+            TLBfound = 1;
+            //TAG = (unsigned int)strtol(gll_get(TLBList, i)->tag);  // convert char tag into unsigned int tag
+            break;
+        }
         }
         
         timeAvailable -= sysParam->TLB_latency;
-        int v = 1;
+        //int v = 1;
         if (TLBfound == 1){  
             //TLB hit
             if(timeAvailable - sysParam->DRAM_latency > 0){    //if time is enough, access DRAM
                 
                 timeAvailable -= sysParam->DRAM_latency;
-                //update TLB
-                struct TLBnode* temp = gll_first(TLBList);
-                gll_pop(TLBList);
-                temp->v = &v;
-                temp->tag = addr_tag;
+                
+                //update TLB .fin
+                unsigned int* temp = gll_get(TLBList, i);
+                //temp->v = &v;
+                gll_remove(TLBList, i);
                 gll_pushBack(TLBList, temp);
                 printf("rp: 1\n");
                 
@@ -247,6 +246,8 @@ int readPage(struct PCB* p, uint64_t stopTime)
                 tempp->pAddr = p;
                 tempp->addr = addr;
                 gll_pushBack(PPTList, tempp);
+                
+                gll_pop(p->memReq);
                 
                 return 1;
             }
@@ -278,12 +279,9 @@ int readPage(struct PCB* p, uint64_t stopTime)
             // page hit, update TLB
             timeAvailable -= sysParam->DRAM_latency;
             
-            //update TLB
-            struct TLBnode* temp = gll_first(TLBList);
-            gll_pop(TLBList);
-            
-            temp->v = &v;
-            temp->tag = addr_tag;
+            //update TLB .fin
+            unsigned int* temp = gll_pop(TLBList);
+            *temp = addr_tag;
             gll_pushBack(TLBList, temp);
             
             //update PPT
@@ -293,6 +291,9 @@ int readPage(struct PCB* p, uint64_t stopTime)
             tempp->addr = addr;
             gll_pushBack(PPTList, tempp);
             printf("rp: 3\n");  //test
+            
+            gll_pop(p->memReq);
+            
             return 1;
                 
         }
@@ -531,12 +532,11 @@ void diskToMemory()
     nPP->addr = addr;
     gll_pushBack(PPTList, nPP);
     
+    // update TLB list .fin
     struct NextMem* TLBaddr = gll_first(temp->memReq);
     unsigned int addr_tag = (unsigned int)strtol(TLBaddr->address, NULL, 16) >> sysParam->P_in_bits;
-    struct TLBnode* tempTLB = gll_pop(TLBList);
-    int v= 1;
-    tempTLB->v = &v;
-    tempTLB->tag = addr_tag;
+    unsigned int* tempTLB = gll_pop(TLBList);
+    *tempTLB = addr_tag;
     gll_pushBack(TLBList, tempTLB);
     
     gll_pushBack(readyProcess, temp);
