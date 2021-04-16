@@ -8,7 +8,7 @@ typedef struct pageTable{
 }pageTable;
   
 typedef struct TLBnode{
-    char v;
+    int v;
     //char* tag;
     unsigned int tag;
     //unsigned int *pte;
@@ -161,7 +161,7 @@ void statsUpdate()
 
 //returns 1 on success, 0 if trace ends, -1 if page fault
 int readPage(struct PCB* p, uint64_t stopTime)
-{   printf("func readP start\n"); //test
+{   //printf("func readP start\n"); //test
     struct NextMem* addr = gll_first(p->memReq);
     uint64_t timeAvailable = stopTime - current_time;
     
@@ -208,8 +208,14 @@ int readPage(struct PCB* p, uint64_t stopTime)
         
         unsigned int addr_tag = (unsigned int)strtol(addr -> address, NULL, 16) >> sysParam->P_in_bits;
         for(i=0; i<16; i++){
-
-            if(((unsigned int)(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16) == addr_tag) && ((TLBnode*)gll_get(TLBList, i))->v == 1){
+        //printf("tlbnode: %p",(TLBnode*)gll_get(TLBList, i));
+        //printf("rp: ptr %s\n",((TLBnode*)gll_get(TLBList, i))->v);
+        //printf("if statement: %d", ((unsigned int)(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16) == addr_tag));
+            if(((unsigned int)(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16) == addr_tag) && (((TLBnode*)gll_get(TLBList, i))->v == 1)){
+                struct TLBnode* tlbn = gll_get(TLBList, i);
+                //printf("a\n");
+                
+                //printf("b\n");
                 TLBfound = 1;
                 //TAG = (unsigned int)strtol(gll_get(TLBList, i)->tag);  // convert char tag into unsigned int tag
                 break;
@@ -217,9 +223,11 @@ int readPage(struct PCB* p, uint64_t stopTime)
         }
         
         timeAvailable -= sysParam->TLB_latency;
-        if (TLBfound == 1){
+        
+        if (TLBfound == 1){  
             //TLB hit
             if(timeAvailable - sysParam->DRAM_latency > 0){    //if time is enough, access DRAM
+                
                 timeAvailable -= sysParam->DRAM_latency;
                 //update TLB
                 struct TLBnode* temp = gll_first(TLBList);
@@ -227,6 +235,7 @@ int readPage(struct PCB* p, uint64_t stopTime)
                 temp->v = 1;
                 temp->tag = addr_tag;
                 gll_pushBack(TLBList, temp);
+                // printf("rp: 1\n");
                 
                 //update PPT
                 struct ppNode* tempp = gll_first(PPTList);
@@ -240,6 +249,7 @@ int readPage(struct PCB* p, uint64_t stopTime)
             else{    //time not enough, exit
                 gll_pushBack(blockedProcess, gll_first(runningProcess));
                 gll_pop(runningProcess);
+                printf("rp: 2\n");  //test
                 return 1;
             }
         }
@@ -258,6 +268,7 @@ int readPage(struct PCB* p, uint64_t stopTime)
               current_time += sysParam->Page_fault_trap_handling_time;
               nextQuanta += sysParam->Page_fault_trap_handling_time;
               OSTime += sysParam->Page_fault_trap_handling_time;
+              printf("rp: return -1 \n");  //test
               return -1;
             }
             // page hit, update TLB
@@ -276,13 +287,14 @@ int readPage(struct PCB* p, uint64_t stopTime)
             tempp->pAddr = p;
             tempp->addr = addr;
             gll_pushBack(PPTList, tempp);
-            
+            printf("rp: 3\n");  //test
             return 1;
                 
         }
         else{    //time not enough, exit
             gll_pushBack(blockedProcess, gll_first(runningProcess));
             gll_pop(runningProcess);
+            printf("rp: 4\n");  //test
             return 1;
         }
         
@@ -457,65 +469,56 @@ void diskToMemory()
     unsigned int l3 = address << (sysParam->N1_in_bits + sysParam->N2_in_bits);
     l3 = l3 >> (32 - sysParam->N3_in_bits);
   
-    printf("func dtm md0\n"); //test
-    printf("zuichudeqidian1: %p\n",temp->vphead);
-    struct VP* vp = gll_get(temp->vphead, l1);
-    printf("vp: %p\n",vp);
     
-            
+    printf("zuichudeqidian1: %p\n",temp->vphead);
+    
+    
     if(temp->vphead == NULL){
         VPList = gll_init();
         int i;
         for(i=0; i<power(sysParam->N1_in_bits); i++){
-            struct VP *vp = malloc(sizeof(struct VP));
-            vp->next_addr = NULL;
-            gll_push(VPList, vp);
+            struct VP *l1vp = malloc(sizeof(struct VP));
+            l1vp->next_addr = NULL;
+            gll_push(VPList, l1vp);
         }
         
         temp->vphead = VPList;
     }
-    
-    if(vp->next_addr == NULL){
+    struct VP* l1vp = gll_get(temp->vphead, l1);
+    if(l1vp->next_addr == NULL){
 
         VPList = gll_init();
         int i;
         for(i=0; i<power(sysParam->N2_in_bits); i++){
-            //struct VP *vp = calloc(1, (sizeof(struct VP)));
-            gll_push(VPList, calloc(1, (sizeof(struct VP))));
+            struct VP *l2vp = malloc(sizeof(struct VP));
+            l2vp->next_addr = NULL;
+            gll_push(VPList, l2vp);
         }
         gll_set(temp->vphead, VPList, l1);
     }
     printf("func dtm md1\n"); //test
     //vp = gll_get(temp->vphead, l1);
-    
-    
-
-    
-    
-    
-    if(*(int*)gll_get((gll_t*)gll_get(temp->vphead, l1), l2) == 0){
+    struct VP* l2vp = gll_get(gll_get(temp->vphead, l1),l2);
+    if(l2vp->next_addr == NULL){
         VPList = gll_init();
         int i;
         for(i=0; i<power(sysParam->N3_in_bits); i++){
-            //struct VP *vp = calloc(1, (sizeof(struct VP)));
-            gll_push(VPList, calloc(1, (sizeof(struct VP))));
+            struct VP *l3vp = malloc(sizeof(struct VP));
+            l3vp->next_addr = NULL;
+            if (i == l3) {
+                l3vp->v = 1;
+            }
+            gll_push(VPList, l3vp);
         }
-
         // cannot set
-        gll_set((gll_t*)gll_get(temp->vphead, l1), VPList, l2);
-
+        gll_set(gll_get(temp->vphead, l1), VPList, l2);
+        gll_set(gll_get(gll_get(temp->vphead, l1), l2), addr, l3);
     }
-    
-    
-    /*
-    VPList = (gll_t*)gll_get(temp->vphead, l1);
-    VPList = (gll_t*)gll_get(VPList, l2);
-    gll_set(VPList, paddr, l3);
-    */
+    printf("func dtm md2\n"); //test
     
     unsigned int padr = ppe;
     gll_set((gll_t*)gll_get((gll_t*)gll_get(temp->vphead, l1), l2), &padr, l3);  // err
-    printf("func dtm md2\n"); //test
+    
     
 
     struct ppNode* nPP;
