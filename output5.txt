@@ -1,0 +1,20 @@
+Context switched = 921
+Start time = 0, 	End time =10091001
+User time = 1, 	OS time = 10091000
+Number of disk interrupt = 0, 	Number of page faults 0, 	Number of TLB miss 0, 
+Blocked state duration = 0
+
+
+Process: process21: 
+Hit Ratio = 1.000000 	Process completion time = 10032998	user time = 0	OS time = 0
+Blocked state duration = 0	Number of page faults = 0	 Number of TLB miss = 0
+
+
+Process: process20: 
+Hit Ratio = 0.636364 	Process completion time = 10089001	user time = 1	OS time = 0
+Blocked state duration = 0	Number of page faults = 0	 Number of TLB miss = 0
+
+
+Process: process22: 
+Hit Ratio = 0.692308 	Process completion time = 10090997	user time = 0	OS time = 0
+Blocked state duration = 0	Number of page faults = 0	 Number of TLB miss = 0

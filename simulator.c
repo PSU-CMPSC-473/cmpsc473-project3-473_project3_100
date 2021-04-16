@@ -111,7 +111,7 @@ void init()
     int i;
     //init TLB
     for(i=0; i<(sysParam->TLB_size_in_entries); i++){
-        unsigned int* tlb = malloc(sizeof(unsigned int));
+        unsigned int* tlb = calloc(1, sizeof(unsigned int));
         //int iv = 0;
         //tlb->v = &iv;
         gll_push(TLBList, tlb);
@@ -164,7 +164,7 @@ void statsUpdate()
 
 //returns 1 on success, 0 if trace ends, -1 if page fault
 int readPage(struct PCB* p, uint64_t stopTime)
-{   //printf("func readP start\n"); //test
+{   printf("func readP start\n"); //test
     struct NextMem* addr = gll_first(p->memReq);
     uint64_t timeAvailable = stopTime - current_time;
     
@@ -205,14 +205,14 @@ int readPage(struct PCB* p, uint64_t stopTime)
     else{
         //TODO: for MEM traces
         //unsigned int TAG;  // tlb tag
-        
+        p->numOfIns++;
         char TLBfound = 0;
         int i;
         
         unsigned int addr_tag = (unsigned int)strtol(addr -> address, NULL, 16) >> sysParam->P_in_bits;
         for(i=0; i<16; i++){
-        printf("%d\n",i);
-        printf("tlbnode: %u\n", *(unsigned int*)gll_get(TLBList, i));
+        //printf("%d\n",i);
+        //printf("tlbnode: %u\n", *(unsigned int*)gll_get(TLBList, i));
         //printf("addr_tag: %u\n", addr_tag);
         //printf("b\n");
         //printf("if statement: %d", ((unsigned int)(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16) == addr_tag));
@@ -238,7 +238,10 @@ int readPage(struct PCB* p, uint64_t stopTime)
                 //temp->v = &v;
                 gll_remove(TLBList, i);
                 gll_pushBack(TLBList, temp);
-                printf("rp: 1\n");
+                //printf("rp: 1\n");
+                
+                p->hitCount++;
+                
                 
                 //update PPT
                 struct ppNode* tempp = gll_first(PPTList);
@@ -259,6 +262,7 @@ int readPage(struct PCB* p, uint64_t stopTime)
             }
         }
         // TLB miss
+        p->missCount++;
         if(timeAvailable - sysParam->DRAM_latency > 0){    //TLB miss, 
             // slice tag into l1, l2, and l3
             unsigned int address = (unsigned int) strtol(addr->address, NULL, 16);
@@ -312,7 +316,9 @@ void schedulingRR(int pauseCause)
     //move first readyProcess to running
     gll_push(runningProcess, gll_first(readyProcess));
     gll_pop(readyProcess);
-
+    
+    
+    
     if(gll_first(runningProcess) != NULL)
     {
         current_time = current_time + contextSwitchTime;
@@ -320,6 +326,17 @@ void schedulingRR(int pauseCause)
         numberContextSwitch++;
         struct PCB* temp = gll_first(runningProcess);
         gll_pushBack(resultStats.executionOrder, temp->name);
+        /*
+        int i;
+        printf("a");
+        for(i=0; i<16; i++){
+          
+          unsigned int* add = (unsigned int*)gll_pop(TLBList);
+          free(add);
+          add = calloc(1, sizeof(unsigned int));
+          gll_pushBack(TLBList, add);
+        }
+        */
     }
 }
 
@@ -434,7 +451,7 @@ void diskToMemory()
     struct PCB* temp = gll_first(blockedProcess);
     
     if(temp != NULL){
-    //printf("func dtm temp\n%p\n",temp);
+    printf("func dtm temp\n%p\n",temp);
     //printf("zuichudeqidian0: %p\n",temp->vphead);
     
     
