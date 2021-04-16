@@ -8,7 +8,7 @@ typedef struct pageTable{
 }pageTable;
   
 typedef struct TLBnode{
-    int v;
+    int* v;
     //char* tag;
     unsigned int tag;
     //unsigned int *pte;
@@ -109,8 +109,10 @@ void init()
     int i;
     //init TLB
     for(i=0; i<(sysParam->TLB_size_in_entries); i++){
-        struct TLBnode *tlb = malloc(sizeof(struct TLBnode));
-        tlb->v = 0;
+        struct TLBnode* tlb = malloc(sizeof(struct TLBnode));
+        int iv = 0;
+        tlb->v = &iv;
+        printf("v:%d\n",*tlb->v);
         gll_push(TLBList, tlb);
     }
     
@@ -138,8 +140,8 @@ void finishAll()
     
     printf("func finishAll end\n"); // test
 //TODO: Anything else you want to destroy
-    //gll_destroy(TLBList);
-    //closeTrace(traceptr);
+    gll_destroy(TLBList);
+    closeTrace(traceptr);
 }
 
 void statsinit()
@@ -208,14 +210,16 @@ int readPage(struct PCB* p, uint64_t stopTime)
         
         unsigned int addr_tag = (unsigned int)strtol(addr -> address, NULL, 16) >> sysParam->P_in_bits;
         for(i=0; i<16; i++){
-        //printf("tlbnode: %p",(TLBnode*)gll_get(TLBList, i));
-        //printf("rp: ptr %s\n",((TLBnode*)gll_get(TLBList, i))->v);
+        //printf("%d\n",i);
+        //printf("tlbnode: %u\n",((TLBnode *)gll_get(TLBList, i))->tag);
+        //printf("addr_tag: %u\n", addr_tag);
+        //printf("v: %d\n",*((TLBnode*)gll_get(TLBList, i))->v);
+        //printf("b\n");
         //printf("if statement: %d", ((unsigned int)(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16) == addr_tag));
-            if(((unsigned int)(((TLBnode*)gll_get(TLBList, i))->tag, NULL, 16) == addr_tag) && (((TLBnode*)gll_get(TLBList, i))->v == 1)){
+            if((((TLBnode *)gll_get(TLBList, i))->tag == addr_tag) && (*((TLBnode*)gll_get(TLBList, i))->v == 1)){
                 struct TLBnode* tlbn = gll_get(TLBList, i);
-                //printf("a\n");
-                
-                //printf("b\n");
+
+
                 TLBfound = 1;
                 //TAG = (unsigned int)strtol(gll_get(TLBList, i)->tag);  // convert char tag into unsigned int tag
                 break;
@@ -223,7 +227,7 @@ int readPage(struct PCB* p, uint64_t stopTime)
         }
         
         timeAvailable -= sysParam->TLB_latency;
-        
+        int v = 1;
         if (TLBfound == 1){  
             //TLB hit
             if(timeAvailable - sysParam->DRAM_latency > 0){    //if time is enough, access DRAM
@@ -232,10 +236,10 @@ int readPage(struct PCB* p, uint64_t stopTime)
                 //update TLB
                 struct TLBnode* temp = gll_first(TLBList);
                 gll_pop(TLBList);
-                temp->v = 1;
+                temp->v = &v;
                 temp->tag = addr_tag;
                 gll_pushBack(TLBList, temp);
-                // printf("rp: 1\n");
+                printf("rp: 1\n");
                 
                 //update PPT
                 struct ppNode* tempp = gll_first(PPTList);
@@ -268,7 +272,7 @@ int readPage(struct PCB* p, uint64_t stopTime)
               current_time += sysParam->Page_fault_trap_handling_time;
               nextQuanta += sysParam->Page_fault_trap_handling_time;
               OSTime += sysParam->Page_fault_trap_handling_time;
-              printf("rp: return -1 \n");  //test
+              //printf("rp: return -1 \n");  //test
               return -1;
             }
             // page hit, update TLB
@@ -277,7 +281,8 @@ int readPage(struct PCB* p, uint64_t stopTime)
             //update TLB
             struct TLBnode* temp = gll_first(TLBList);
             gll_pop(TLBList);
-            temp->v = 1;
+            
+            temp->v = &v;
             temp->tag = addr_tag;
             gll_pushBack(TLBList, temp);
             
@@ -428,11 +433,11 @@ void diskToMemory()
     struct PCB* temp = gll_first(blockedProcess);
     
     if(temp != NULL){
-    printf("func dtm temp\n%p\n",temp);
-    printf("zuichudeqidian0: %p\n",temp->vphead);
+    //printf("func dtm temp\n%p\n",temp);
+    //printf("zuichudeqidian0: %p\n",temp->vphead);
     
     
-    printf("func dtm start\n"); //test
+    //printf("func dtm start\n"); //test
     gll_t *VPList;
     // TODO: Move requests from disk to memory
     // TODO: move appropriate blocked process to ready process
@@ -442,7 +447,7 @@ void diskToMemory()
     struct PCB* tempPCB = tempp->pAddr;
     struct NextMem* paddr= tempp->addr;
     
-    printf("func dtm paddr\n%p\n",paddr);
+    //printf("func dtm paddr\n%p\n",paddr);
     if(paddr != NULL){
     
     unsigned int paddress = (unsigned int) strtol(paddr->address, NULL, 16);
@@ -470,7 +475,7 @@ void diskToMemory()
     l3 = l3 >> (32 - sysParam->N3_in_bits);
   
     
-    printf("zuichudeqidian1: %p\n",temp->vphead);
+    //printf("zuichudeqidian1: %p\n",temp->vphead);
     
     
     if(temp->vphead == NULL){
@@ -496,7 +501,7 @@ void diskToMemory()
         }
         gll_set(temp->vphead, VPList, l1);
     }
-    printf("func dtm md1\n"); //test
+    //printf("func dtm md1\n"); //test
     //vp = gll_get(temp->vphead, l1);
     struct VP* l2vp = gll_get(gll_get(temp->vphead, l1),l2);
     if(l2vp->next_addr == NULL){
@@ -514,7 +519,7 @@ void diskToMemory()
         gll_set(gll_get(temp->vphead, l1), VPList, l2);
         gll_set(gll_get(gll_get(temp->vphead, l1), l2), addr, l3);
     }
-    printf("func dtm md2\n"); //test
+    //printf("func dtm md2\n"); //test
     
     unsigned int padr = ppe;
     gll_set((gll_t*)gll_get((gll_t*)gll_get(temp->vphead, l1), l2), &padr, l3);  // err
@@ -528,15 +533,15 @@ void diskToMemory()
     
     struct NextMem* TLBaddr = gll_first(temp->memReq);
     unsigned int addr_tag = (unsigned int)strtol(TLBaddr->address, NULL, 16) >> sysParam->P_in_bits;
-    struct TLBnode* tempTLB = gll_first(TLBList);
-    gll_pop(TLBList);
-    tempTLB->v = 1;
+    struct TLBnode* tempTLB = gll_pop(TLBList);
+    int v= 1;
+    tempTLB->v = &v;
     tempTLB->tag = addr_tag;
     gll_pushBack(TLBList, tempTLB);
     
     gll_pushBack(readyProcess, temp);
     gll_pop(blockedProcess);
-    printf("func dtm end\n"); //test
+    //printf("func dtm end\n"); //test
     
     
     ppe++;
@@ -545,7 +550,7 @@ void diskToMemory()
     {
         printf("Done diskToMemory\n");
     }
-    printf("func dtm end\n"); //test
+    //printf("func dtm end\n"); //test
     
     }
 }
